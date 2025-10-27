@@ -7,8 +7,6 @@ from urllib.parse import quote
 MTOW = "8389421211:AAFpS885ESGYHyEz4dxuXz0_nnYg1BFNDr8"
 bot = telebot.TeleBot(MTOW, parse_mode="Markdown")
 
-# Botun cookies dosyası (tarayıcıdan export ettiğin)
-COOKIES_FILE = "cookies.txt"  # Bot klasörüne koymayı unutma
 
 @bot.message_handler(commands=['start'])
 def start(msg):
@@ -35,27 +33,25 @@ def music(msg):
         if len(args) < 2:
             bot.reply_to(msg, "Lütfen şarkı adını veya YouTube bağlantısını yaz.\n\nÖrnek: /music sezen zalim")
             return
-        mtowi = args[1].strip()
-        hal = bot.send_message(msg.chat.id, "🔍 Şarkı aranıyor, lütfen bekle...")
+        search = args[1].strip()
+        hal = bot.send_message(msg.chat.id, "🔍 Şarkı hazırlanıyor, lütfen bekle...")
 
-        # Youtube linki mi yoksa arama mı
-        if "youtube.com" in mtowi or "youtu.be" in mtowi:
-            url = mtowi
+        # Eğer kullanıcı direkt link verdiyse kullan
+        if "youtube.com" in search or "youtu.be" in search:
+            url = search
         else:
-            url = youtube_ara(mtowi)
-        if not url:
-            bot.edit_message_text("Şarkı bulunamadı, başka bir isim dene.", msg.chat.id, hal.message_id)
-            return
+            # Basit yöntem: video ID yerine arama kelimesini YouTube linkinin sonuna ekle
+            query = quote(search)
+            url = f"https://www.youtube.com/results?search_query={query}"
 
         bot.edit_message_text("🎧 Şarkı indiriliyor...", msg.chat.id, hal.message_id)
 
-        # Öncelikle m4a dene
+        # İndirilecek format
         ydl_opts = {
             'format': 'bestaudio[ext=m4a]',
             'outtmpl': '%(title)s.%(ext)s',
             'noplaylist': True,
-            'quiet': True,
-            'cookiefile': COOKIES_FILE if os.path.exists(COOKIES_FILE) else None
+            'quiet': True
         }
 
         try:
@@ -73,6 +69,7 @@ def music(msg):
         sarkıcı = info.get("uploader", "Bilinmeyen")
         sure = info.get("duration", 0)
         thumbnail = info.get("thumbnail")
+
         caption = (
             f"🎵 {isim}\n"
             f"👤 Sanatçı: {sarkıcı}\n"
@@ -110,20 +107,6 @@ def music(msg):
 
     except Exception as e:
         bot.send_message(msg.chat.id, f"Bir hata oluştu:\n`{e}`")
-
-
-def youtube_ara(mtowi):
-    """Basit youtube araması (cookies ile)"""
-    try:
-        q = quote(mtowi)
-        html = requests.get(f"https://www.youtube.com/results?search_query={q}", timeout=10).text
-        idx = html.find("/watch?v=")
-        if idx != -1:
-            video_id = html[idx:idx + 20]
-            return "https://www.youtube.com" + video_id
-    except:
-        pass
-    return None
 
 
 bot.infinity_polling()
