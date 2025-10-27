@@ -7,6 +7,8 @@ from urllib.parse import quote
 MTOW = "8389421211:AAFpS885ESGYHyEz4dxuXz0_nnYg1BFNDr8"
 bot = telebot.TeleBot(MTOW, parse_mode="Markdown")
 
+# Botun cookies dosyası (tarayıcıdan export ettiğin)
+COOKIES_FILE = "cookies.txt"  # Bot klasörüne koymayı unutma
 
 @bot.message_handler(commands=['start'])
 def start(msg):
@@ -35,6 +37,8 @@ def music(msg):
             return
         mtowi = args[1].strip()
         hal = bot.send_message(msg.chat.id, "🔍 Şarkı aranıyor, lütfen bekle...")
+
+        # Youtube linki mi yoksa arama mı
         if "youtube.com" in mtowi or "youtu.be" in mtowi:
             url = mtowi
         else:
@@ -42,24 +46,25 @@ def music(msg):
         if not url:
             bot.edit_message_text("Şarkı bulunamadı, başka bir isim dene.", msg.chat.id, hal.message_id)
             return
+
         bot.edit_message_text("🎧 Şarkı indiriliyor...", msg.chat.id, hal.message_id)
+
+        # Öncelikle m4a dene
+        ydl_opts = {
+            'format': 'bestaudio[ext=m4a]',
+            'outtmpl': '%(title)s.%(ext)s',
+            'noplaylist': True,
+            'quiet': True,
+            'cookiefile': COOKIES_FILE if os.path.exists(COOKIES_FILE) else None
+        }
+
         try:
-            ydl_opts = {
-                'format': 'bestaudio[ext=m4a]',
-                'outtmpl': '%(title)s.%(ext)s',
-                'noplaylist': True,
-                'quiet': True,
-            }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 dosya_adi = ydl.prepare_filename(info)
         except Exception:
-            ydl_opts = {
-                'format': 'bestaudio',
-                'outtmpl': '%(title)s.%(ext)s',
-                'noplaylist': True,
-                'quiet': True,
-            }
+            # fallback: webm
+            ydl_opts['format'] = 'bestaudio'
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 dosya_adi = ydl.prepare_filename(info)
@@ -74,7 +79,9 @@ def music(msg):
             f"⏱ Süre: {int(sure // 60)}:{int(sure % 60):02d}\n"
             f"🔗 [YouTube]({url})"
         )
+
         bot.edit_message_text(f"✅ {isim} indirildi, gönderiliyor...", msg.chat.id, hal.message_id)
+
         thumb_path = None
         if thumbnail:
             try:
@@ -94,15 +101,19 @@ def music(msg):
                 performer=sarkıcı,
                 thumb=open(thumb_path, "rb") if thumb_path else None
             )
+
         os.remove(dosya_adi)
         if thumb_path and os.path.exists(thumb_path):
             os.remove(thumb_path)
+
         bot.send_message(msg.chat.id, "✅ Şarkı başarıyla gönderildi!")
+
     except Exception as e:
         bot.send_message(msg.chat.id, f"Bir hata oluştu:\n`{e}`")
 
 
 def youtube_ara(mtowi):
+    """Basit youtube araması (cookies ile)"""
     try:
         q = quote(mtowi)
         html = requests.get(f"https://www.youtube.com/results?search_query={q}", timeout=10).text
